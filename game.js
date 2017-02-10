@@ -1,7 +1,7 @@
 var canvas = document.getElementById("canvas");
 var ctx = canvas.getContext("2d");
 
-var keyPressed = {
+var keys = {
 	65: false, // left (a)
 	68: false, // right (d)
 	87: false, // up (w)
@@ -11,8 +11,8 @@ var keyPressed = {
 };
 
 var init_time;
-var time = 0;
-var interval = 0;
+var TIME = 0;
+var INT = 0;
 var pause = false;
 var scroll = 1;
 var score = 0;
@@ -20,20 +20,85 @@ var players = [];
 var enemies = [];
 var e_bullets = [];
 var p_bullets = [];
+var STATE = 0;
+
+function Log(){
+	this.data = [[2000, 0]];
+	this.update = function(){
+		if(STATE != 0){
+			if(STATE == this.data[0][1]){
+				this.data[0][0] += INT;
+			}else{
+				this.data.unshift([INT, STATE]);
+			}
+			var t = INT;
+			while(t > 0){
+				if(this.data[this.data.length-1][0] < t){
+					t = t - this.data[this.data.length-1][0];
+					this.data = this.data.slice(0, this.data.length-1);
+				}else{
+					this.data[this.data.length-1][0] = this.data[this.data.length-1][0] - t;
+					t = 0;
+				}
+			}
+		}
+	}
+	this.get = function(delay){
+		var t = delay;
+		for(i = 0; i < this.data.length; i++){
+			if(this.data[i][0] < t){
+				t = t - this.data[i][0];
+			}else{
+				return this.data[i][1]
+			}
+		}
+		return this.data[this.data.length-1][1];
+	}
+}
+
+var log = new Log();
+
+function updateState(){
+	if(keys[87] && !keys[83]){
+		if(keys[65] && !keys[68]){
+			STATE = 8;
+		}else if(!keys[65] && keys[68]){
+			STATE = 2;
+		}else{
+			STATE = 1;
+		}
+	}else if(!keys[87] && keys[83]){
+		if(keys[65] && !keys[68]){
+			STATE = 6;
+		}else if(!keys[65] && keys[68]){
+			STATE = 4;
+		}else{
+			STATE = 5;
+		}
+	}else{
+		if(keys[65] && !keys[68]){
+			STATE = 7;
+		}else if(!keys[65] && keys[68]){
+			STATE = 3;
+		}else{
+			STATE = 0;
+		}
+	}
+}
 
 document.addEventListener(
 	'keydown', 
 	function(e){
-		if(e.keyCode == 32 && !keyPressed[32]){players.map(function(x){x.charge()})}
-		if(e.keyCode == 80 && !keyPressed[80]){pause = !pause};
-		keyPressed[e.keyCode] = true;
+		if(e.keyCode == 32 && !keys[32]){players.map(function(x){x.charge()})};
+		if(e.keyCode == 80 && !keys[80]){pause = !pause};
+		keys[e.keyCode] = true;
 	}, 
 	false
 );
 document.addEventListener(
 	'keyup', 
 	function(e){
-		keyPressed[e.keyCode] = false;
+		keys[e.keyCode] = false;
 		if(e.keyCode == 32){players.map(function(x){x.fire()})};
 	}, 
 	false
@@ -41,12 +106,17 @@ document.addEventListener(
 
 var spawn_arr = [
 	[0, 'players', new Ball(100, 100)],
-	[1000, 'enemies', new Turret(500, 200)],
-	[1000, 'enemies', new Turret(600, 300)]
+	[0, 'players', new Baby(100, 100, 200)],
+	[0, 'players', new Baby(100, 100, 400)],
+	[0, 'players', new Baby(100, 100, 600)],
+	[0, 'players', new Baby(100, 100, 800)],
+	[0, 'players', new Baby(100, 100, 1000)],
+	[0, 'enemies', new Turret(500, 200)],
+	[0, 'enemies', new Turret(600, 300)]
 ];
 
 function spawn(){
-	if(spawn_arr.length > 0 && time >= spawn_arr[0][0]){
+	if(spawn_arr.length > 0 && TIME >= spawn_arr[0][0]){
 		switch(spawn_arr[0][1]){
 			case 'players':
 				players.push(spawn_arr[0][2]);
@@ -56,7 +126,7 @@ function spawn(){
 				break;
 		}
 		spawn_arr.shift();
-		spawn()
+		spawn();
 	}
 }
 
@@ -66,10 +136,18 @@ function normalize(x, y, l){
 }
 
 function drawCircle(x, y, r, color){
-	ctx.beginPath()
+	ctx.beginPath();
 	ctx.arc(x, y, r, 0, Math.PI * 2);
 	ctx.fillStyle = '#fff';
 	ctx.fill();
+	ctx.closePath();
+}
+
+function drawRing(x, y, r, color){
+	ctx.beginPath();
+	ctx.arc(x, y, r, 0, Math.PI * 2);
+	ctx.strokeStyle = '#fff';
+	ctx.stroke();
 	ctx.closePath();
 }
 
@@ -80,6 +158,7 @@ function Ball(x, y){
 	this.dx = 0;
 	this.dy = 0;
 	this.t = 0;
+	this.v = .2;
 	this.fire = function(){
 		var k = Math.min(6, Math.floor(this.t / 333));
 		p_bullets.push(new Bullet(this.x, this.y, 1, 0, 3 + k / 2, 1 + k));
@@ -88,23 +167,102 @@ function Ball(x, y){
 		this.t = 0;
 	}
 	this.update = function(){
-		var h = keyPressed[68] - keyPressed[65];
-		var v = keyPressed[83] - keyPressed[87];
-		if(h == 0 && v == 0){var k = 0;}
-		else{var k = .2 * interval / Math.sqrt(Math.abs(h) + Math.abs(v));}
-		this.dx = h * k;
-		this.dy = v * k;
-		this.x = Math.max(Math.min(this.x + this.dx, 710), 10);
-		this.y = Math.max(Math.min(this.y + this.dy, 350), 10);
-		this.t += interval;
+		log.update();
+		switch(STATE){
+			case 0:
+				this.dx = 0;
+				this.dy = 0;
+				break;
+			case 1:
+				this.dx = 0;
+				this.dy = -this.v;
+				break;
+			case 2:
+				this.dx = this.v/Math.sqrt(2);
+				this.dy = -this.v/Math.sqrt(2);
+				break;
+			case 3:
+				this.dx = this.v;
+				this.dy = 0;
+				break;
+			case 4:
+				this.dx = this.v/Math.sqrt(2);
+				this.dy = this.v/Math.sqrt(2);
+				break;
+			case 5:
+				this.dx = 0;
+				this.dy = this.v;
+				break;
+			case 6:
+				this.dx = -this.v/Math.sqrt(2);
+				this.dy = this.v/Math.sqrt(2);
+				break;
+			case 7:
+				this.dx = -this.v;
+				this.dy = 0;
+				break;
+			case 8:
+				this.dx = -this.v/Math.sqrt(2);
+				this.dy = -this.v/Math.sqrt(2);
+		}
+		this.dx *= INT;
+		this.dy *= INT;
+		this.x = Math.max(Math.min(this.x + this.dx, 720), 0);
+		this.y = Math.max(Math.min(this.y + this.dy, 360), 0);
+		this.t += INT;
 	}
 	this.draw = function(){
-		// ctx.beginPath()
-		// ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-		// ctx.fillStyle = '#fff';
-		// ctx.fill();
-		// ctx.closePath();
 		drawCircle(this.x, this.y, this.r, '#fff');
+	}
+}
+
+function Baby(x, y, delay){
+	this.x = x;
+	this.y = y;
+	this.r = 5;
+	this.v = .2;
+	this.delay = delay;
+	this.charge = function(){};
+	this.fire = function(){
+		p_bullets.push(new Bullet(this.x, this.y, 1, 0, 2, 1));
+	}
+	this.update = function(){
+		if(STATE != 0){
+			switch(log.get(this.delay)){
+				case 1:
+					this.y += -this.v * INT;
+					break;
+				case 2:
+					this.x += this.v/Math.sqrt(2) * INT;
+					this.y += -this.v/Math.sqrt(2) * INT;
+					break;
+				case 3:
+					this.x += this.v * INT;
+					break;
+				case 4:
+					this.x += this.v/Math.sqrt(2) * INT;
+					this.y += this.v/Math.sqrt(2) * INT;
+					break;
+				case 5:
+					this.y += this.v * INT;
+					break;
+				case 6:
+					this.x += -this.v/Math.sqrt(2) * INT;
+					this.y += this.v/Math.sqrt(2) * INT;
+					break;
+				case 7:
+					this.x += -this.v * INT;
+					break;
+				case 8:
+					this.x += -this.v/Math.sqrt(2) * INT;
+					this.y += -this.v/Math.sqrt(2) * INT;
+			}
+		}
+		this.x = Math.max(Math.min(this.x, 720), 0);
+		this.y = Math.max(Math.min(this.y, 360), 0);
+	}
+	this.draw = function(){
+		drawRing(this.x, this.y, this.r, '#fff');
 	}
 }
 
@@ -117,8 +275,8 @@ function Bullet(x, y, dx, dy, r, dmg){
 	this.dmg = dmg;
 	this.del = false;
 	this.update = function(){
-		this.x += this.dx * interval;
-		this.y += this.dy * interval;
+		this.x += this.dx * INT;
+		this.y += this.dy * INT;
 		if(this.x > 720 + this.r || this.x < -this.r){
 			this.del = true;
 		}
@@ -127,11 +285,6 @@ function Bullet(x, y, dx, dy, r, dmg){
 		this.del = true;
 	}
 	this.draw = function(){
-		// ctx.beginPath()
-		// ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-		// ctx.fillStyle = '#fff';
-		// ctx.fill();
-		// ctx.closePath();
 		drawCircle(this.x, this.y, this.r, '#fff')
 	}
 }
@@ -140,10 +293,10 @@ function Turret(x, y){
 	this.x = x;
 	this.y = y;
 	this.r = 12;
-	this.health = 10;
+	this.health = 2;
 	this.reload = 1000;
 	this.del = false;
-	this.score = 1;
+	this.score = 10;
 	this.t = 0;
 	this.fire = function(){
 		if(players.length > 0){
@@ -152,7 +305,7 @@ function Turret(x, y){
 		}
 	}
 	this.update = function(){
-		this.t += interval;
+		this.t += INT;
 		if(this.t >= this.reload){
 			this.t = this.t - 1000;
 			this.fire();
@@ -167,11 +320,6 @@ function Turret(x, y){
 		bullet.hit();
 	}
 	this.draw = function(){
-		// ctx.beginPath()
-		// ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-		// ctx.fillStyle = '#fff';
-		// ctx.fill();
-		// ctx.closePath();
 		drawCircle(this.x, this.y, this.r, '#ff5');
 	}
 }
@@ -185,11 +333,6 @@ function Drone(x, y, r, h){
 		self.y += dy;
 	}
 	this.draw = function(){
-		// ctx.beginPath()
-		// ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-		// ctx.fillStyle = '#fff';
-		// ctx.fill();
-		// ctx.closePath();
 		drawCircle(this.x, this.y, this.r, '#f5f');
 	}
 }
@@ -232,8 +375,6 @@ function Drone(x, y, r, h){
 // 	}
 // }
 
-// enemies.push(new Turret(500, 300));
-
 function update(){
 	function collision(){
 		function overlap(obj1, obj2){
@@ -249,6 +390,7 @@ function update(){
 			}
 		}
 	}
+	updateState();
 	players.map(function(x){x.update()});
 	p_bullets.map(function(x){x.update()});
 	e_bullets.map(function(x){x.update()});
@@ -268,9 +410,9 @@ function draw(){
 }
 
 function main(timestamp){
-	if(!init_time){init_time = timestamp;};
-	interval = timestamp - init_time - time;
-	time = timestamp - init_time;
+	if(!init_time)init_time = timestamp;
+	INT = timestamp - init_time - TIME;
+	TIME = timestamp - init_time;
 	spawn();
 	update();
 	draw();
