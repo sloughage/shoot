@@ -10,53 +10,58 @@ var keys = {
 	80: false  // pause (p)
 };
 
-var init_time;
 var TIME = 0;
-var INT = 0;
-var pause = false;
-var scroll = 1;
-var score = 0;
+var SCROLL = .08;
+var SCORE = 0;
+var STATE = 0;
+var PHASE = 0;
+var LVL = 0;
+
 var players = [];
 var enemies = [];
 var e_bullets = [];
 var p_bullets = [];
-var STATE = 0;
+var stars = [];
 
-function Log(){
-	this.data = [[2000, 0]];
+var log = new Log();
+
+function rand(a, b){
+	return Math.floor(Math.random() * (b - a + 1)) + a;
+}
+
+function Star(x=720){//framed
+	var d = rand(4, 10);
+	var c = (14 - d).toString(16);
+	this.x = x;
+	this.y = rand(0, 360);
+	this.dx = -10 / d;
+	this.color = "#" + c + c + c;
+	this.length = Math.floor(80 / d);
+	this.del = false;
 	this.update = function(){
-		if(STATE != 0){
-			if(STATE == this.data[0][1]){
-				this.data[0][0] += INT;
-			}else{
-				this.data.unshift([INT, STATE]);
-			}
-			var t = INT;
-			while(t > 0){
-				if(this.data[this.data.length-1][0] < t){
-					t = t - this.data[this.data.length-1][0];
-					this.data = this.data.slice(0, this.data.length-1);
-				}else{
-					this.data[this.data.length-1][0] = this.data[this.data.length-1][0] - t;
-					t = 0;
-				}
-			}
+		this.x += this.dx;
+		if(this.x + this.length < 0){
+			this.del = true;
 		}
 	}
-	this.get = function(delay){
-		var t = delay;
-		for(i = 0; i < this.data.length; i++){
-			if(this.data[i][0] < t){
-				t = t - this.data[i][0];
-			}else{
-				return this.data[i][1]
-			}
-		}
-		return this.data[this.data.length-1][1];
+	this.draw = function(){
+		drawLine(this.x, this.y, this.x + this.length, this.y, this.color);
 	}
 }
 
-var log = new Log();
+function Log(){
+	this.data = [];
+	for(i=0, var x=ball.x, var y=ball.y; i<120; i++){this.data.push([x, y])};
+	this.update = function(){
+		if(keys[87] != keys[83] || keys[65] != keys[68]){
+			this.data.unshift([ball.x, ball.y]);
+			this.data = this.data.pop();
+		}
+	}
+	this.get = function(delay){
+		return this.data[delay - 1];
+	}
+}
 
 function updateState(){
 	if(keys[87] && !keys[83]){
@@ -86,11 +91,16 @@ function updateState(){
 	}
 }
 
-document.addEventListener(
+document.addEventListener(//framed
 	'keydown', 
 	function(e){
-		if(e.keyCode == 32 && !keys[32]){players.map(function(x){x.charge()})};
-		if(e.keyCode == 80 && !keys[80]){pause = !pause};
+		if((e.keyCode == 32 && PHASE < 2)||(e.keyCode == 80 && !keys[80] && PHASE == 1)){
+			PHASE = 2;
+			// window.requestAnimationFrame(function(x){PREV_TS = x});
+			window.requestAnimationFrame(main);
+		}else if(e.keyCode == 80 && !keys[80] && PHASE == 2){
+			PHASE = 1;
+		};
 		keys[e.keyCode] = true;
 	}, 
 	false
@@ -99,30 +109,38 @@ document.addEventListener(
 	'keyup', 
 	function(e){
 		keys[e.keyCode] = false;
-		if(e.keyCode == 32){players.map(function(x){x.fire()})};
 	}, 
 	false
 );
 
+var ball = new Ball(100, 100);
 var spawn_arr = [
-	[0, 'players', new Ball(100, 100)],
-	[0, 'players', new Baby(100, 100, 200)],
-	[0, 'players', new Baby(100, 100, 400)],
-	[0, 'players', new Baby(100, 100, 600)],
-	[0, 'players', new Baby(100, 100, 800)],
-	[0, 'players', new Baby(100, 100, 1000)],
-	[0, 'enemies', new Turret(500, 200)],
-	[0, 'enemies', new Turret(600, 300)]
+	[0, 'p', ball],
+	[0, 'p', new Baby(150)],
+	[0, 'p', new Baby(300)],
+	[0, 'p', new Baby(450)],
+	[0, 'e', new Turret(740, 200)],
+	[0, 'e', new Turret(740, 300)],
+	[0, 'e', new Drone(740, 100, 8, 50)],
+	[1000, 'e', new Tank(740,250)]
 ];
 
+var spawn_arr2 = [
+	[0, 'p', ball],
+	[0, 'e', new Turret(740, 100)]
+]
+
 function spawn(){
+	if(Math.random() < .15){
+		stars.unshift(new Star());
+	}
 	if(spawn_arr.length > 0 && TIME >= spawn_arr[0][0]){
 		switch(spawn_arr[0][1]){
-			case 'players':
-				players.push(spawn_arr[0][2]);
+			case 'p':
+				players.unshift(spawn_arr[0][2]);
 				break;
-			case 'enemies':
-				enemies.push(spawn_arr[0][2]);
+			case 'e':
+				enemies.unshift(spawn_arr[0][2]);
 				break;
 		}
 		spawn_arr.shift();
@@ -135,10 +153,16 @@ function normalize(x, y, l){
 	else{var k = l / Math.sqrt(x * x + y * y); return [x * k, y * k];}
 }
 
+function overlap(obj1, obj2){
+	var h = Math.pow(obj1.x - obj2.x, 2);
+	var v = Math.pow(obj1.y - obj2.y, 2);
+	return Math.sqrt(h + v) <= obj1.r + obj2.r;
+}
+
 function drawCircle(x, y, r, color){
 	ctx.beginPath();
 	ctx.arc(x, y, r, 0, Math.PI * 2);
-	ctx.fillStyle = '#fff';
+	ctx.fillStyle = color;
 	ctx.fill();
 	ctx.closePath();
 }
@@ -146,7 +170,16 @@ function drawCircle(x, y, r, color){
 function drawRing(x, y, r, color){
 	ctx.beginPath();
 	ctx.arc(x, y, r, 0, Math.PI * 2);
-	ctx.strokeStyle = '#fff';
+	ctx.strokeStyle = color;
+	ctx.stroke();
+	ctx.closePath();
+}
+
+function drawLine(x1, y1, x2, y2, color){
+	ctx.beginPath();
+	ctx.strokeStyle = color;
+	ctx.moveTo(x1, y1);
+	ctx.lineTo(x2, y2);
 	ctx.stroke();
 	ctx.closePath();
 }
@@ -158,134 +191,77 @@ function Ball(x, y){
 	this.dx = 0;
 	this.dy = 0;
 	this.t = 0;
-	this.v = .2;
+	this.reload = 3;
+	this.v = 4;
+	this.health = 10;
 	this.fire = function(){
-		var k = Math.min(6, Math.floor(this.t / 333));
-		p_bullets.push(new Bullet(this.x, this.y, 1, 0, 3 + k / 2, 1 + k));
-	}
-	this.charge = function(){
-		this.t = 0;
+		p_bullets.push(new Bullet(this.x, this.y, 16, 0, 3, 3, '#3f3'))
 	}
 	this.update = function(){
-		log.update();
-		switch(STATE){
-			case 0:
-				this.dx = 0;
-				this.dy = 0;
-				break;
-			case 1:
-				this.dx = 0;
-				this.dy = -this.v;
-				break;
-			case 2:
-				this.dx = this.v/Math.sqrt(2);
-				this.dy = -this.v/Math.sqrt(2);
-				break;
-			case 3:
-				this.dx = this.v;
-				this.dy = 0;
-				break;
-			case 4:
-				this.dx = this.v/Math.sqrt(2);
-				this.dy = this.v/Math.sqrt(2);
-				break;
-			case 5:
-				this.dx = 0;
-				this.dy = this.v;
-				break;
-			case 6:
-				this.dx = -this.v/Math.sqrt(2);
-				this.dy = this.v/Math.sqrt(2);
-				break;
-			case 7:
-				this.dx = -this.v;
-				this.dy = 0;
-				break;
-			case 8:
-				this.dx = -this.v/Math.sqrt(2);
-				this.dy = -this.v/Math.sqrt(2);
+		this.t++;
+		var dx = keys[68] - keys[65];
+		var dy = keys[83] - keys[87];
+		if(dx != 0 && dy != 0){
+			var k = this.v / Math.sqrt(Math.abs(dx) + Math.abs(dy));
+			this.x = Math.max(Math.min(this.x + dx * k, 720), 0);
+			this.y = Math.max(Math.min(this.y + dy * k, 360), 0);
 		}
-		this.dx *= INT;
-		this.dy *= INT;
-		this.x = Math.max(Math.min(this.x + this.dx, 720), 0);
-		this.y = Math.max(Math.min(this.y + this.dy, 360), 0);
-		this.t += INT;
+		if(keys[32] && this.t >= this.reload){
+			this.t = 0;
+			for(p in players){p.fire()};
+		}
+		log.update();
+	}
+	this.collision = function(bullet){
+		if(!bullet.del && overlap(this, bullet)){
+			bullet.del = true;
+			this.health -= bullet.dmg;
+			if(this.health <= 0){
+				this.del = true;
+				SCORE += this.score;
+			}
+		}
 	}
 	this.draw = function(){
 		drawCircle(this.x, this.y, this.r, '#fff');
 	}
 }
 
-function Baby(x, y, delay){
-	this.x = x;
-	this.y = y;
+function Baby(delay){
 	this.r = 5;
-	this.v = .2;
+	this.reload = 3;
 	this.delay = delay;
-	this.charge = function(){};
 	this.fire = function(){
-		p_bullets.push(new Bullet(this.x, this.y, 1, 0, 2, 1));
+		p_bullets.push(new Bullet(this.x, this.y, 16, 0, 2, 1, '#3f3'));
 	}
 	this.update = function(){
-		if(STATE != 0){
-			switch(log.get(this.delay)){
-				case 1:
-					this.y += -this.v * INT;
-					break;
-				case 2:
-					this.x += this.v/Math.sqrt(2) * INT;
-					this.y += -this.v/Math.sqrt(2) * INT;
-					break;
-				case 3:
-					this.x += this.v * INT;
-					break;
-				case 4:
-					this.x += this.v/Math.sqrt(2) * INT;
-					this.y += this.v/Math.sqrt(2) * INT;
-					break;
-				case 5:
-					this.y += this.v * INT;
-					break;
-				case 6:
-					this.x += -this.v/Math.sqrt(2) * INT;
-					this.y += this.v/Math.sqrt(2) * INT;
-					break;
-				case 7:
-					this.x += -this.v * INT;
-					break;
-				case 8:
-					this.x += -this.v/Math.sqrt(2) * INT;
-					this.y += -this.v/Math.sqrt(2) * INT;
-			}
-		}
-		this.x = Math.max(Math.min(this.x, 720), 0);
-		this.y = Math.max(Math.min(this.y, 360), 0);
+		[this.x, this.y] = log.get(this.delay);
+	}
+	this.collision = function(bullet){
+		return false;
 	}
 	this.draw = function(){
+		drawCircle(this.x, this.y, this.r, '#000');
 		drawRing(this.x, this.y, this.r, '#fff');
 	}
 }
 
-function Bullet(x, y, dx, dy, r, dmg){
+function Bullet(x, y, dx, dy, r, dmg, color){
 	this.x = x;
 	this.y = y;
 	this.dx = dx;
 	this.dy = dy;
 	this.r = r;
 	this.dmg = dmg;
+	this.color = color;
 	this.del = false;
 	this.update = function(){
-		this.x += this.dx * INT;
-		this.y += this.dy * INT;
-		if(this.x > 720 + this.r || this.x < -this.r){
-			this.del = true;
-		}
-	}
-	this.hit = function(){
-		this.del = true;
+		this.x += this.dx;
+		this.y += this.dy;
+		if(this.x > 720 + this.r || this.x < -this.r){this.del = true};
 	}
 	this.draw = function(){
-		drawCircle(this.x, this.y, this.r, '#fff')
+		drawCircle(this.x, this.y, this.r, this.color);
 	}
 }
 
@@ -293,47 +269,71 @@ function Turret(x, y){
 	this.x = x;
 	this.y = y;
 	this.r = 12;
-	this.health = 2;
-	this.reload = 1000;
+	this.health = 10;
+	this.reload = 60;
 	this.del = false;
 	this.score = 10;
 	this.t = 0;
 	this.fire = function(){
-		if(players.length > 0){
-			var c = normalize(players[0].x - this.x, players[0].y - this.y, .2);
-			e_bullets.push(new Bullet(this.x, this.y, c[0], c[1], 3, 1));
-		}
+		var c = normalize(ball.x - this.x, ball.y - this.y, 3);
+		e_bullets.push(new Bullet(this.x, this.y, c[0], c[1], 4, 1, '#f3f'));
 	}
 	this.update = function(){
 		this.t += INT;
+		if(this.x < -this.r){
+			this.del = true;
+		}
 		if(this.t >= this.reload){
 			this.t = this.t - 1000;
 			this.fire();
 		}
+		this.x -= SCROLL * INT;
 	}
-	this.hit = function(bullet){
-		this.health -= bullet.dmg;
-		if(this.health <= 0){
-			this.del = true;
-			score += this.score;
+	this.collision = function(bullet){
+		if(!bullet.del && overlap(this, bullet)){
+			bullet.del = true;
+			this.health -= bullet.dmg;
+			if(this.health <= 0){
+				this.del = true;
+				SCORE += this.score;
+			}
 		}
-		bullet.hit();
 	}
 	this.draw = function(){
-		drawCircle(this.x, this.y, this.r, '#ff5');
+		drawCircle(this.x, this.y, this.r, '#fff');
 	}
 }
-function Drone(x, y, r, h){
+function Drone(x, y, r, health){
 	this.x = x;
 	this.y = y;
 	this.r = r;
-	this.h = h;
+	this.health = health;
+	this.t = 0;
+	this.del = false;
+	this.score = 0;
 	this.move = function(dx, dy){
 		self.x += dx;
 		self.y += dy;
 	}
 	this.draw = function(){
-		drawCircle(this.x, this.y, this.r, '#f5f');
+		drawCircle(this.x, this.y, this.r, '#000');
+		drawRing(this.x, this.y, this.r, '#fff');
+	}
+	this.update = function(){
+		this.t += INT;
+		this.x -= SCROLL * INT;
+	}
+	this.collision = function(bullet){
+		if(!bullet.del && overlap(this, bullet)){
+			bullet.del = true;
+			this.health -= bullet.dmg;
+			if(this.health <= 0){
+				this.del = true;
+				SCORE += this.score;
+			}
+			return true;
+		}
+		return false;
 	}
 }
 
@@ -346,77 +346,113 @@ function Drone(x, y, r, h){
 // 		this.children.map(function(x){x.draw()})
 // 	}
 // }
-// function Tank(x, y){
-// 	this.x = x;
-// 	this.y = y;
-// 	this.dx = 0;
-// 	this.dy = 0;
-// 	this.r = 10;
-// 	this.h = 20;
-// 	// this.children = [new Drone(this.x - 6, this.y - 6, 5, 20), new Drone(this.x - 6, this.y + 6, 5, 20), new Drone(this.x - 8, this.y, 5, 20)];
-// 	this.update(){
-// 		// this.children = this.children.filter(function(x){return x.h > 0});
-// 	}
-// 	this.draw(){
-// 		ctx.beginPath()
-// 		ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
-// 		ctx.fillStyle = '#fff';
-// 		ctx.fill();
-// 		ctx.closePath();
-// 		// draw(this.x, this.y, this.r, '#5ff');
-// 		// for(i in this.children){
-// 		// 	ctx.beginPath()
-// 		// 	ctx.arc(this.children[i].x, this.children[i].y, this.children[i].r, 0, Math.PI * 2);
-// 		// 	ctx.fillStyle = '#fff';
-// 		// 	ctx.fill();
-// 		// 	ctx.closePath();
-// 		// 	// this.children[i].draw();
-// 		// }
-// 	}
-// }
-
-function update(){
-	function collision(){
-		function overlap(obj1, obj2){
-			var h = Math.pow(obj1.x - obj2.x, 2);
-			var v = Math.pow(obj1.y - obj2.y, 2);
-			return Math.sqrt(h + v) <= obj1.r + obj2.r;
-		}
-		for(i in p_bullets){
-			for(j in enemies){
-				if(overlap(p_bullets[i], enemies[j])){
-					enemies[j].hit(p_bullets[i]);
-				}
-			}
+function Tank(x, y){
+	this.x = x;
+	this.y = y;
+	this.r = 12;
+	this.health = 20;
+	this.reload = 1000;
+	this.del = false;
+	this.score = 20;
+	this.t = 0;
+	this.bv = .2
+	this.children = [new Drone(this.x - 5, this.y - 5, 8, 20), new Drone(this.x - 5, this.y + 5, 8, 20)];
+	this.fire = function(){
+		if(players.length > 0){
+			e_bullets.push(new Bullet(this.x, this.y, -this.bv, 0, 4, 1, '#f3f'));
 		}
 	}
+	this.update = function(){
+		this.t += INT;
+		if(this.t >= this.reload){
+			this.t = this.t - 1000;
+			this.fire();
+		}
+		this.x -= SCROLL * INT;
+		this.children.forEach(function(x){x.update()});
+	}
+	this.collision = function(bullet){
+		for(i in this.children){
+			this.children[i].collision(bullet);
+		}
+		if(!bullet.del && overlap(this, bullet)){
+			bullet.del = true;
+			this.health -= bullet.dmg;
+			if(this.health <= 0){
+				this.del = true;
+				SCORE += this.score;
+			}
+		}
+		this.children = this.children.filter(function(x){return !x.del});
+	}
+	this.draw = function(){
+		drawCircle(this.x, this.y, this.r, '#fff');
+		for(i in this.children){
+			this.children[i].draw();
+		}
+	}
+}
+
+function update(){
 	updateState();
+	stars.map(function(x){x.update()});
 	players.map(function(x){x.update()});
 	p_bullets.map(function(x){x.update()});
 	e_bullets.map(function(x){x.update()});
 	enemies.map(function(x){x.update()});
-	collision();
-	p_bullets = p_bullets.filter(function(x){return !x.del;});
-	e_bullets = e_bullets.filter(function(x){return !x.del;});
-	enemies = enemies.filter(function(x){return !x.del;});
+	e_bullets.map(function(x){players.map(function(y){y.collision(x)})});
+	p_bullets.map(function(x){enemies.map(function(y){y.collision(x)})});
+	stars = stars.filter(function(x){return !x.del});
+	p_bullets = p_bullets.filter(function(x){return !x.del});
+	e_bullets = e_bullets.filter(function(x){return !x.del});
+	enemies = enemies.filter(function(x){return !x.del});
 }
 
 function draw(){
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	stars.map(function(x){x.draw()});
 	players.map(function(x){x.draw()});
 	p_bullets.map(function(x){x.draw()});
 	e_bullets.map(function(x){x.draw()});
 	enemies.map(function(x){x.draw()});
+	ctx.fillStyle = '#fff';
+	ctx.font = '12px';
+	ctx.fillText(ball.health, 5, 10);
+	ctx.fillText(SCORE, 705, 10);
+	ctx.fillText(stars.length, 705, 350)
 }
 
-function main(timestamp){
-	if(!init_time)init_time = timestamp;
-	INT = timestamp - init_time - TIME;
-	TIME = timestamp - init_time;
-	spawn();
-	update();
-	draw();
-	window.requestAnimationFrame(main);
+function drawPause(){
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	ctx.fillStyle = '#fff';
+	ctx.textAlign = 'center';
+	ctx.fillText("PAUSED", 360, 180);
+}
+
+function drawMenu(){
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	ctx.fillStyle = '#fff';
+	ctx.textAlign = 'center';
+	ctx.fillText("SHOOT", 360, 180);
+}
+
+function main(ts){
+	if(PHASE == 0){
+		drawMenu();
+	}else if(PHASE == 1){
+		drawPause();
+	}else{
+		if(TIME == 0){
+			for(i = 0; i < 50; i++){
+				stars.unshift(new Star(rand(0, 720)));
+			}
+		}
+		TIME++;
+		spawn();
+		update();
+		draw();
+		window.requestAnimationFrame(main);
+	}
 }
 
 window.requestAnimationFrame(main);
