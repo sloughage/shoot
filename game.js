@@ -11,152 +11,54 @@ var keys = {
 };
 
 var TIME = 0;
-var SCROLL = .08;
+var SCROLL = 1;
 var SCORE = 0;
 var STATE = 0;
-var PHASE = 0;
-var LVL = 0;
 
-var players = [];
-var enemies = [];
-var e_bullets = [];
-var p_bullets = [];
-var stars = [];
+var ENEMIES = [];
+var E_BULLETS = [];
+var A_BULLETS = [];
+var ITEMS = [];
+var STARS = [];
 
-var log = new Log();
+var BALL = new Ball(100, 100);
+var LVL = new Leveler();
+var LOG = new Log();
 
-function rand(a, b){
-	return Math.floor(Math.random() * (b - a + 1)) + a;
-}
-
-function Star(x=720){//framed
-	var d = rand(4, 10);
-	var c = (14 - d).toString(16);
-	this.x = x;
-	this.y = rand(0, 360);
-	this.dx = -10 / d;
-	this.color = "#" + c + c + c;
-	this.length = Math.floor(80 / d);
-	this.del = false;
-	this.update = function(){
-		this.x += this.dx;
-		if(this.x + this.length < 0){
-			this.del = true;
-		}
-	}
-	this.draw = function(){
-		drawLine(this.x, this.y, this.x + this.length, this.y, this.color);
-	}
-}
-
-function Log(){
-	this.data = [];
-	for(i=0, var x=ball.x, var y=ball.y; i<120; i++){this.data.push([x, y])};
-	this.update = function(){
-		if(keys[87] != keys[83] || keys[65] != keys[68]){
-			this.data.unshift([ball.x, ball.y]);
-			this.data = this.data.pop();
-		}
-	}
-	this.get = function(delay){
-		return this.data[delay - 1];
-	}
-}
-
-function updateState(){
-	if(keys[87] && !keys[83]){
-		if(keys[65] && !keys[68]){
-			STATE = 8;
-		}else if(!keys[65] && keys[68]){
-			STATE = 2;
-		}else{
-			STATE = 1;
-		}
-	}else if(!keys[87] && keys[83]){
-		if(keys[65] && !keys[68]){
-			STATE = 6;
-		}else if(!keys[65] && keys[68]){
-			STATE = 4;
-		}else{
-			STATE = 5;
-		}
-	}else{
-		if(keys[65] && !keys[68]){
-			STATE = 7;
-		}else if(!keys[65] && keys[68]){
-			STATE = 3;
-		}else{
-			STATE = 0;
-		}
-	}
-}
-
-document.addEventListener(//framed
+document.addEventListener(
 	'keydown', 
 	function(e){
-		if((e.keyCode == 32 && PHASE < 2)||(e.keyCode == 80 && !keys[80] && PHASE == 1)){
-			PHASE = 2;
-			// window.requestAnimationFrame(function(x){PREV_TS = x});
+		if((e.keyCode == 32 && STATE < 2)||(e.keyCode == 80 && !keys[80] && STATE == 1)){
+			STATE = 2;
 			window.requestAnimationFrame(main);
-		}else if(e.keyCode == 80 && !keys[80] && PHASE == 2){
-			PHASE = 1;
+		}else if(e.keyCode == 80 && !keys[80] && STATE == 2){
+			STATE = 1;
 		};
 		keys[e.keyCode] = true;
 	}, 
 	false
-);
+)
 document.addEventListener(
 	'keyup', 
 	function(e){
 		keys[e.keyCode] = false;
 	}, 
 	false
-);
+)
 
-var ball = new Ball(100, 100);
-var spawn_arr = [
-	[0, 'p', ball],
-	[0, 'p', new Baby(150)],
-	[0, 'p', new Baby(300)],
-	[0, 'p', new Baby(450)],
-	[0, 'e', new Turret(740, 200)],
-	[0, 'e', new Turret(740, 300)],
-	[0, 'e', new Drone(740, 100, 8, 50)],
-	[1000, 'e', new Tank(740,250)]
-];
-
-var spawn_arr2 = [
-	[0, 'p', ball],
-	[0, 'e', new Turret(740, 100)]
-]
-
-function spawn(){
-	if(Math.random() < .15){
-		stars.unshift(new Star());
-	}
-	if(spawn_arr.length > 0 && TIME >= spawn_arr[0][0]){
-		switch(spawn_arr[0][1]){
-			case 'p':
-				players.unshift(spawn_arr[0][2]);
-				break;
-			case 'e':
-				enemies.unshift(spawn_arr[0][2]);
-				break;
-		}
-		spawn_arr.shift();
-		spawn();
-	}
-}
-
-function normalize(x, y, l){
-	if(x == 0 && y == 0){return [x, y];}
-	else{var k = l / Math.sqrt(x * x + y * y); return [x * k, y * k];}
+function rand(a, b){
+	return Math.floor(Math.random() * (b - a + 1)) + a;
 }
 
 function overlap(obj1, obj2){
 	var h = Math.pow(obj1.x - obj2.x, 2);
 	var v = Math.pow(obj1.y - obj2.y, 2);
 	return Math.sqrt(h + v) <= obj1.r + obj2.r;
+}
+
+function normalize(x, y, l){
+	if(x == 0 && y == 0){return [x, y];}
+	else{var k = l / Math.sqrt(x * x + y * y); return [x * k, y * k];}
 }
 
 function drawCircle(x, y, r, color){
@@ -184,65 +86,63 @@ function drawLine(x1, y1, x2, y2, color){
 	ctx.closePath();
 }
 
-function Ball(x, y){
-	this.x = x;
-	this.y = y;
-	this.r = 10;
-	this.dx = 0;
-	this.dy = 0;
-	this.t = 0;
-	this.reload = 3;
-	this.v = 4;
-	this.health = 10;
-	this.fire = function(){
-		p_bullets.push(new Bullet(this.x, this.y, 16, 0, 3, 3, '#3f3'))
-	}
+function Leveler(){
+	this.data = [
+		[
+			[0, new Turret(740, 100)],
+			[0, new Turret(740, 200)],
+			[60, new Turret(740, 200)],
+			[120, new Turret(740, 300)],
+			[210, new Tank(740,250)]
+		],
+		[
+			[0, new Turret(740, 200)],
+			[60, new Turret(740, 200)],
+			[120, new Turret(740, 300)],
+			[180, new Tank(740,250)]
+		]
+	]
+	this.lvl = 0;
+	this.pos = 0;
 	this.update = function(){
-		this.t++;
-		var dx = keys[68] - keys[65];
-		var dy = keys[83] - keys[87];
-		if(dx != 0 && dy != 0){
-			var k = this.v / Math.sqrt(Math.abs(dx) + Math.abs(dy));
-			this.x = Math.max(Math.min(this.x + dx * k, 720), 0);
-			this.y = Math.max(Math.min(this.y + dy * k, 360), 0);
+		STARS.unshift(new Star());
+		if(this.pos < this.data[this.lvl].length && this.data[this.lvl][this.pos][0] == TIME){
+			ENEMIES.unshift(this.data[this.lvl][this.pos][1]);
+			this.pos++;
+			this.update();
 		}
-		if(keys[32] && this.t >= this.reload){
-			this.t = 0;
-			for(p in players){p.fire()};
-		}
-		log.update();
-	}
-	this.collision = function(bullet){
-		if(!bullet.del && overlap(this, bullet)){
-			bullet.del = true;
-			this.health -= bullet.dmg;
-			if(this.health <= 0){
-				this.del = true;
-				SCORE += this.score;
-			}
-		}
-	}
-	this.draw = function(){
-		drawCircle(this.x, this.y, this.r, '#fff');
 	}
 }
 
-function Baby(delay){
-	this.r = 5;
-	this.reload = 3;
-	this.delay = delay;
-	this.fire = function(){
-		p_bullets.push(new Bullet(this.x, this.y, 16, 0, 2, 1, '#3f3'));
-	}
+function Log(){
+	this.data = [];
+	for(i = 0; i < 120; i++){this.data.push([BALL.x, BALL.y])};
 	this.update = function(){
-		[this.x, this.y] = log.get(this.delay);
+		if(keys[87] != keys[83] || keys[65] != keys[68]){
+			this.data.unshift([BALL.x, BALL.y]);
+			this.data.pop();
+		}
 	}
-	this.collision = function(bullet){
-		return false;
+	this.get = function(delay){
+		return this.data[delay - 1];
+	}
+}
+
+function Star(){
+	var d = rand(4, 10);
+	var c = (14 - d).toString(16);
+	this.x = 720;
+	this.y = rand(0, 360);
+	this.dx = -10 / d;
+	this.color = "#" + c + c + c;
+	this.length = Math.floor(80 / d);
+	this.del = Math.random() > .1;
+	this.update = function(){
+		this.x += this.dx;
+		if(this.x + this.length < 0){this.del = true};
 	}
 	this.draw = function(){
-		drawCircle(this.x, this.y, this.r, '#000');
-		drawRing(this.x, this.y, this.r, '#fff');
+		drawLine(this.x, this.y, this.x + this.length, this.y, this.color);
 	}
 }
 
@@ -265,6 +165,95 @@ function Bullet(x, y, dx, dy, r, dmg, color){
 	}
 }
 
+function Ball(x, y){
+	this.x = x;
+	this.y = y;
+	this.r = 10;
+	this.dx = 0;
+	this.dy = 0;
+	this.t = 0;
+	this.reload = 3;
+	this.health = 10;
+	this.children = [];
+	this.fire = function(){
+		A_BULLETS.push(new Bullet(this.x, this.y, 16, 0, 3, 3, '#3f3'))
+	}
+	this.update = function(){
+		this.t++;
+		this.children.forEach(function(x){x.update()});
+		var dx = keys[68] - keys[65];
+		var dy = keys[83] - keys[87];
+		if(dx != 0 || dy != 0){
+			var k = 4 / Math.sqrt(Math.abs(dx) + Math.abs(dy));
+			this.x = Math.max(Math.min(this.x + dx * k, 720), 0);
+			this.y = Math.max(Math.min(this.y + dy * k, 360), 0);
+		}
+		if(keys[32] && this.t >= this.reload){
+			this.t = 0;
+			this.fire();
+			this.children.forEach(function(x){x.fire()});
+		}
+		LOG.update();
+	}
+	this.collision = function(bullet){
+		if(!bullet.del && overlap(this, bullet)){
+			bullet.del = true;
+			this.health -= bullet.dmg;
+			if(this.health <= 0){this.del = true};
+		}
+	}
+	this.pickup = function(item){
+		if(overlap(this, item)){
+			item.del = true;
+			this.children.unshift(new Baby((this.children.length + 1) * 10));
+		}
+	}
+	this.draw = function(){
+		this.children.forEach(function(x){x.draw()});
+		drawCircle(this.x, this.y, this.r, '#fff');
+	}
+}
+
+function Baby(delay){
+	this.r = 5;
+	this.delay = delay;
+	this.fire = function(){
+		A_BULLETS.push(new Bullet(this.x, this.y, 16, 0, 2, 1, '#3f3'));
+	}
+	this.update = function(){
+		if(keys[87] != keys[83] || keys[65] != keys[68]){
+			var p = LOG.get(this.delay);
+			this.x = p[0];
+			this.y = p[1];
+		}
+	}
+	this.collision = function(bullet){
+		return false;
+	}
+	this.draw = function(){
+		drawCircle(this.x, this.y, this.r, '#000');
+		drawRing(this.x, this.y, this.r, '#fff');
+	}
+}
+
+function Item(x, y){
+	this.x = x;
+	this.y = y;
+	this.r = 6;
+	this.r2 = 3;
+	this.del = false;
+	this.update = function(){
+		this.x -= SCROLL * 2;
+		if(this.x < -this.r){
+			this.del = true;
+		}
+	}
+	this.draw = function(){
+		drawCircle(this.x, this.y, this.r, '#3f3');
+		drawCircle(this.x, this.y, this.r2, '#000');
+	}
+}
+
 function Turret(x, y){
 	this.x = x;
 	this.y = y;
@@ -275,19 +264,17 @@ function Turret(x, y){
 	this.score = 10;
 	this.t = 0;
 	this.fire = function(){
-		var c = normalize(ball.x - this.x, ball.y - this.y, 3);
-		e_bullets.push(new Bullet(this.x, this.y, c[0], c[1], 4, 1, '#f3f'));
+		var c = normalize(BALL.x - this.x, BALL.y - this.y, 3);
+		E_BULLETS.push(new Bullet(this.x, this.y, c[0], c[1], 4, 1, '#f3f'));
 	}
 	this.update = function(){
-		this.t += INT;
-		if(this.x < -this.r){
-			this.del = true;
-		}
+		this.t++;
 		if(this.t >= this.reload){
-			this.t = this.t - 1000;
 			this.fire();
+			this.t = 0;
 		}
-		this.x -= SCROLL * INT;
+		this.x -= SCROLL;
+		if(this.x < -this.r){this.del = true};
 	}
 	this.collision = function(bullet){
 		if(!bullet.del && overlap(this, bullet)){
@@ -296,14 +283,18 @@ function Turret(x, y){
 			if(this.health <= 0){
 				this.del = true;
 				SCORE += this.score;
+				ITEMS.push(new Item(this.x, this.y));
 			}
+			return true;
 		}
+		return false;
 	}
 	this.draw = function(){
 		drawCircle(this.x, this.y, this.r, '#fff');
 	}
 }
-function Drone(x, y, r, health){
+
+function Drone(x, y, r, health, angle){
 	this.x = x;
 	this.y = y;
 	this.r = r;
@@ -311,17 +302,15 @@ function Drone(x, y, r, health){
 	this.t = 0;
 	this.del = false;
 	this.score = 0;
-	this.move = function(dx, dy){
-		self.x += dx;
-		self.y += dy;
+	this.angle = angle;
+	this.fire = function(){
+		var c = normalize(-2, angle, 3);
+		E_BULLETS.push(new Bullet(this.x, this.y, c[0], c[1], 4, 1, '#f3f'));
 	}
-	this.draw = function(){
-		drawCircle(this.x, this.y, this.r, '#000');
-		drawRing(this.x, this.y, this.r, '#fff');
-	}
-	this.update = function(){
-		this.t += INT;
-		this.x -= SCROLL * INT;
+	this.update = function(dx, dy){
+		this.t++;
+		this.x += dx;
+		this.y += dy;
 	}
 	this.collision = function(bullet){
 		if(!bullet.del && overlap(this, bullet)){
@@ -335,46 +324,63 @@ function Drone(x, y, r, health){
 		}
 		return false;
 	}
+	this.draw = function(){
+		drawCircle(this.x, this.y, this.r, '#333');
+		drawRing(this.x, this.y, this.r, '#fff');
+	}
 }
 
-// function Swarm(x, y, children){
-// 	this.x = x;
-// 	this.y = y;
-// 	this.children = drones;
-// 	this.update(){};
-// 	this.draw(){
-// 		this.children.map(function(x){x.draw()})
-// 	}
-// }
 function Tank(x, y){
 	this.x = x;
 	this.y = y;
-	this.r = 12;
-	this.health = 20;
-	this.reload = 1000;
+	this.r = 15;
+	this.dx = -SCROLL;
+	this.dy = 0;
+	this.health = 80;
+	this.reload = 60;
 	this.del = false;
 	this.score = 20;
+	this.change = 150;
 	this.t = 0;
-	this.bv = .2
-	this.children = [new Drone(this.x - 5, this.y - 5, 8, 20), new Drone(this.x - 5, this.y + 5, 8, 20)];
+	this.state = 0;
+	this.children = [
+		new Drone(this.x - 10, this.y - 8, 8, 50, -1), 
+		new Drone(this.x - 10, this.y + 8, 8, 50, 1),
+		new Drone(this.x - 12, this.y, 8, 50, 0)
+	]
 	this.fire = function(){
-		if(players.length > 0){
-			e_bullets.push(new Bullet(this.x, this.y, -this.bv, 0, 4, 1, '#f3f'));
-		}
+		this.children.forEach(function(x){x.fire()});
 	}
 	this.update = function(){
-		this.t += INT;
-		if(this.t >= this.reload){
-			this.t = this.t - 1000;
-			this.fire();
+		this.t++;
+		this.change--;
+		if(this.state == 0 && this.change == 0){
+			this.dx = 0;
+			this.dy = 1;
+			this.state = 1;
+		}else if(this.state == 1){
+			if(this.children.length == 0){
+				this.state = 2;
+				this.dx = SCROLL;
+				this.dy = 0;
+				this.change = 150;
+			}else if(this.y >= 300 || this.y <= 60){
+				this.dy = -this.dy;
+			}
+		}else if(this.state == 2 && this.change == 0){
+			this.del = true;
 		}
-		this.x -= SCROLL * INT;
-		this.children.forEach(function(x){x.update()});
+		this.x += this.dx;
+		this.y += this.dy;
+		if(this.t >= this.reload){
+			this.fire();
+			this.t = 0;
+		}
+		var self = this;
+		this.children.forEach(function(x){x.update(self.dx, self.dy)});
 	}
 	this.collision = function(bullet){
-		for(i in this.children){
-			this.children[i].collision(bullet);
-		}
+		this.children.forEach(function(x){x.collision(bullet)});
 		if(!bullet.del && overlap(this, bullet)){
 			bullet.del = true;
 			this.health -= bullet.dmg;
@@ -386,40 +392,44 @@ function Tank(x, y){
 		this.children = this.children.filter(function(x){return !x.del});
 	}
 	this.draw = function(){
-		drawCircle(this.x, this.y, this.r, '#fff');
-		for(i in this.children){
-			this.children[i].draw();
-		}
+		this.children.forEach(function(x){x.draw()});
+		drawCircle(this.x, this.y, this.r, '#333');
+		drawRing(this.x, this.y, this.r, '#fff');
 	}
 }
 
 function update(){
-	updateState();
-	stars.map(function(x){x.update()});
-	players.map(function(x){x.update()});
-	p_bullets.map(function(x){x.update()});
-	e_bullets.map(function(x){x.update()});
-	enemies.map(function(x){x.update()});
-	e_bullets.map(function(x){players.map(function(y){y.collision(x)})});
-	p_bullets.map(function(x){enemies.map(function(y){y.collision(x)})});
-	stars = stars.filter(function(x){return !x.del});
-	p_bullets = p_bullets.filter(function(x){return !x.del});
-	e_bullets = e_bullets.filter(function(x){return !x.del});
-	enemies = enemies.filter(function(x){return !x.del});
+	STARS.forEach(function(x){x.update()});
+	A_BULLETS.forEach(function(x){x.update()});
+	E_BULLETS.forEach(function(x){x.update()});
+	ITEMS.forEach(function(x){x.update()});
+	BALL.update();
+	ENEMIES.forEach(function(x){x.update()});
+	LVL.update();
+	E_BULLETS.forEach(function(x){BALL.collision(x)});
+	ITEMS.forEach(function(x){BALL.pickup(x)});
+	A_BULLETS.forEach(function(x){ENEMIES.forEach(function(y){y.collision(x)})});
+	STARS = STARS.filter(function(x){return !x.del});
+	ITEMS = ITEMS.filter(function(x){return !x.del});
+	A_BULLETS = A_BULLETS.filter(function(x){return !x.del});
+	E_BULLETS = E_BULLETS.filter(function(x){return !x.del});
+	ENEMIES = ENEMIES.filter(function(x){return !x.del});
+	// if(ENEMIES.length == 0 && lvl_arr[LVL].length == 0){}
 }
 
 function draw(){
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
-	stars.map(function(x){x.draw()});
-	players.map(function(x){x.draw()});
-	p_bullets.map(function(x){x.draw()});
-	e_bullets.map(function(x){x.draw()});
-	enemies.map(function(x){x.draw()});
+	STARS.forEach(function(x){x.draw()});
+	A_BULLETS.forEach(function(x){x.draw()});
+	BALL.draw();
+	ITEMS.forEach(function(x){x.draw()});
+	ENEMIES.forEach(function(x){x.draw()});
+	E_BULLETS.forEach(function(x){x.draw()});
 	ctx.fillStyle = '#fff';
-	ctx.font = '12px';
-	ctx.fillText(ball.health, 5, 10);
-	ctx.fillText(SCORE, 705, 10);
-	ctx.fillText(stars.length, 705, 350)
+	ctx.textAlign = 'left';
+	ctx.fillText(BALL.health, 10, 15);
+	ctx.textAlign = 'right';
+	ctx.fillText(SCORE, 705, 15);
 }
 
 function drawPause(){
@@ -434,23 +444,23 @@ function drawMenu(){
 	ctx.fillStyle = '#fff';
 	ctx.textAlign = 'center';
 	ctx.fillText("SHOOT", 360, 180);
+	ctx.fillText("WASD, SPACE, P(ause)", 360, 200)
 }
 
-function main(ts){
-	if(PHASE == 0){
+function main(){
+	if(STATE == 0){
+		for(i = 0; i < 720; i++){
+			STARS.unshift(new Star());
+			STARS.forEach(function(x){x.update()});
+			STARS = STARS.filter(function(x){return !x.del});
+		}
 		drawMenu();
-	}else if(PHASE == 1){
+	}else if(STATE == 1){
 		drawPause();
 	}else{
-		if(TIME == 0){
-			for(i = 0; i < 50; i++){
-				stars.unshift(new Star(rand(0, 720)));
-			}
-		}
-		TIME++;
-		spawn();
 		update();
 		draw();
+		TIME++;
 		window.requestAnimationFrame(main);
 	}
 }
