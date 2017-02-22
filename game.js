@@ -21,9 +21,9 @@ var A_BULLETS = [];
 var ITEMS = [];
 var STARS = [];
 
-var BALL = new Ball(100, 100);
-var LVL = new Leveler();
 var LOG = new Log();
+var BALL = new Ball();
+var LVL = new Leveler();
 
 document.addEventListener(
 	'keydown', 
@@ -33,7 +33,20 @@ document.addEventListener(
 			window.requestAnimationFrame(main);
 		}else if(e.keyCode == 80 && !keys[80] && STATE == 2){
 			STATE = 1;
-		};
+		}else if(STATE == 4 && e.keyCode == 32 && !keys[32]){
+			STATE = 0;
+			TIME = 0;
+			SCORE = 0;
+			ENEMIES = [];
+			E_BULLETS = [];
+			A_BULLETS = [];
+			ITEMS = [];
+			STARS = [];
+			LOG = new Log();
+			BALL = new Ball();
+			LVL = new Leveler();
+			window.requestAnimationFrame(main);
+		}
 		keys[e.keyCode] = true;
 	}, 
 	false
@@ -99,24 +112,45 @@ function Leveler(){
 			[0, new Turret(740, 200)],
 			[60, new Turret(740, 200)],
 			[120, new Turret(740, 300)],
-			[180, new Tank(740,250)]
+			[180, new Tank(740, 250)],
+			[180, new Tank(780, 150)]
+		],
+		[
+			[60, new Tank(740, 80)],
+			[60, new Tank(740, 280)],
+			[120, new Tank(780, 180)]
 		]
 	]
 	this.lvl = 0;
 	this.pos = 0;
+	this.fin = false;
 	this.update = function(){
-		STARS.unshift(new Star());
-		if(this.pos < this.data[this.lvl].length && this.data[this.lvl][this.pos][0] == TIME){
-			ENEMIES.unshift(this.data[this.lvl][this.pos][1]);
-			this.pos++;
-			this.update();
+		if(this.pos < this.data[this.lvl].length){
+			if(this.data[this.lvl][this.pos][0] == TIME){
+				ENEMIES.unshift(this.data[this.lvl][this.pos][1]);
+				this.pos++;
+				this.update();
+			}
+		}else{
+			this.fin = true;
+		}
+	}
+	this.next = function(){
+		this.lvl += 1;
+		this.pos = 0;
+		this.fin = false;
+		if(this.lvl == this.data.length){
+			STATE = 4;
 		}
 	}
 }
 
 function Log(){
-	this.data = [];
-	for(i = 0; i < 120; i++){this.data.push([BALL.x, BALL.y])};
+	this.fill = function(){
+		this.data = [];
+		for(i = 0; i < 120; i++){this.data.push([60, 180])};
+	}
+	this.fill();
 	this.update = function(){
 		if(keys[87] != keys[83] || keys[65] != keys[68]){
 			this.data.unshift([BALL.x, BALL.y]);
@@ -165,22 +199,28 @@ function Bullet(x, y, dx, dy, r, dmg, color){
 	}
 }
 
-function Ball(x, y){
-	this.x = x;
-	this.y = y;
+function Ball(){
 	this.r = 10;
-	this.dx = 0;
-	this.dy = 0;
-	this.t = 0;
 	this.reload = 3;
-	this.health = 10;
 	this.children = [];
+	this.set = function(){
+		this.x = 60;
+		this.y = 180;
+		this.dx = 0;
+		this.dy = 0;
+		this.t = this.reload;
+		this.health = 3;
+		this.children.forEach(function(x){x.update()});
+	}
+	this.set();
 	this.fire = function(){
 		A_BULLETS.push(new Bullet(this.x, this.y, 16, 0, 3, 3, '#3f3'))
 	}
 	this.update = function(){
 		this.t++;
-		this.children.forEach(function(x){x.update()});
+		if(keys[87] != keys[83] || keys[65] != keys[68]){
+			this.children.forEach(function(x){x.update()});
+		}
 		var dx = keys[68] - keys[65];
 		var dy = keys[83] - keys[87];
 		if(dx != 0 || dy != 0){
@@ -199,13 +239,16 @@ function Ball(x, y){
 		if(!bullet.del && overlap(this, bullet)){
 			bullet.del = true;
 			this.health -= bullet.dmg;
-			if(this.health <= 0){this.del = true};
+			if(this.health <= 0){STATE = 4};
 		}
 	}
 	this.pickup = function(item){
 		if(overlap(this, item)){
 			item.del = true;
-			this.children.unshift(new Baby((this.children.length + 1) * 10));
+			SCORE += 5;
+			if(this.children.length < 9){
+				this.children.unshift(new Baby((this.children.length + 1) * 10));
+			}
 		}
 	}
 	this.draw = function(){
@@ -221,11 +264,9 @@ function Baby(delay){
 		A_BULLETS.push(new Bullet(this.x, this.y, 16, 0, 2, 1, '#3f3'));
 	}
 	this.update = function(){
-		if(keys[87] != keys[83] || keys[65] != keys[68]){
-			var p = LOG.get(this.delay);
-			this.x = p[0];
-			this.y = p[1];
-		}
+		var p = LOG.get(this.delay);
+		this.x = p[0];
+		this.y = p[1];
 	}
 	this.collision = function(bullet){
 		return false;
@@ -406,6 +447,7 @@ function update(){
 	BALL.update();
 	ENEMIES.forEach(function(x){x.update()});
 	LVL.update();
+	STARS.unshift(new Star());
 	E_BULLETS.forEach(function(x){BALL.collision(x)});
 	ITEMS.forEach(function(x){BALL.pickup(x)});
 	A_BULLETS.forEach(function(x){ENEMIES.forEach(function(y){y.collision(x)})});
@@ -414,11 +456,24 @@ function update(){
 	A_BULLETS = A_BULLETS.filter(function(x){return !x.del});
 	E_BULLETS = E_BULLETS.filter(function(x){return !x.del});
 	ENEMIES = ENEMIES.filter(function(x){return !x.del});
-	// if(ENEMIES.length == 0 && lvl_arr[LVL].length == 0){}
+	if(LVL.fin && ENEMIES.length == 0 && ITEMS.length == 0){
+		STATE = 3;
+		TIME = -180;
+	}
+}
+
+function updateTransition(){
+	STARS.forEach(function(x){x.update()});
+	A_BULLETS.forEach(function(x){x.update()});
+	E_BULLETS.forEach(function(x){x.update()});
+	STARS = STARS.filter(function(x){return !x.del});
+	ITEMS = ITEMS.filter(function(x){return !x.del});
+	A_BULLETS = A_BULLETS.filter(function(x){return !x.del});
+	E_BULLETS = E_BULLETS.filter(function(x){return !x.del});
 }
 
 function draw(){
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	ctx.clearRect(0, 0, 720, 360);
 	STARS.forEach(function(x){x.draw()});
 	A_BULLETS.forEach(function(x){x.draw()});
 	BALL.draw();
@@ -433,18 +488,38 @@ function draw(){
 }
 
 function drawPause(){
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	ctx.clearRect(0, 0, 720, 360);
 	ctx.fillStyle = '#fff';
 	ctx.textAlign = 'center';
 	ctx.fillText("PAUSED", 360, 180);
 }
 
 function drawMenu(){
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
+	ctx.clearRect(0, 0, 720, 360);
 	ctx.fillStyle = '#fff';
 	ctx.textAlign = 'center';
 	ctx.fillText("SHOOT", 360, 180);
 	ctx.fillText("WASD, SPACE, P(ause)", 360, 200)
+}
+
+function drawTransition(){
+	ctx.clearRect(0, 0, 720, 360);
+	STARS.forEach(function(x){x.draw()});
+	A_BULLETS.forEach(function(x){x.draw()});
+	BALL.draw();
+	ctx.fillStyle = '#fff';
+	ctx.textAlign = 'left';
+	ctx.fillText(BALL.health, 10, 15);
+	ctx.textAlign = 'right';
+	ctx.fillText(SCORE, 705, 15);
+	ctx.clearRect(TIME * -8 - 720, 0, TIME * -8, 360);
+}
+
+function drawEnd(){
+	ctx.clearRect(0, 0, 720, 360);
+	ctx.fillStyle = '#fff';
+	ctx.textAlign = 'center';
+	ctx.fillText(SCORE, 360, 180);
 }
 
 function main(){
@@ -457,11 +532,25 @@ function main(){
 		drawMenu();
 	}else if(STATE == 1){
 		drawPause();
-	}else{
+	}else if(STATE == 2){
 		update();
 		draw();
 		TIME++;
 		window.requestAnimationFrame(main);
+	}else if(STATE == 3){
+		updateTransition();
+		drawTransition();
+		TIME++;
+		if(TIME == -90){
+			LOG.fill();
+			BALL.set();
+			LVL.next();
+		}else if(TIME == 0){
+			STATE = 2;
+		}
+		window.requestAnimationFrame(main);
+	}else{
+		drawEnd();
 	}
 }
 
